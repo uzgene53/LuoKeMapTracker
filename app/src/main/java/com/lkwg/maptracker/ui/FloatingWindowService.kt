@@ -1,8 +1,9 @@
 package com.lkwg.maptracker.ui
 
-import android.app.Service
+import android.app.*
 import android.content.*
 import android.graphics.*
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import android.view.*
@@ -21,6 +22,8 @@ class FloatingWindowService : Service() {
     companion object {
         private const val TAG = "FloatingWindow"
         private const val WINDOW_SIZE_DP = 360
+        private const val CHANNEL_ID = "map_tracker_overlay"
+        private const val NOTIFICATION_ID = 2
     }
 
     private var windowManager: WindowManager? = null
@@ -50,6 +53,11 @@ class FloatingWindowService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // ⚠️ 必须先启动前台服务，否则 Android 14+ 会直接杀掉服务
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, buildNotification("🗺️ 悬浮窗已启动"))
+
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
         val filter = IntentFilter(ScreenCaptureService.ACTION_MATCH_RESULT)
@@ -219,6 +227,34 @@ class FloatingWindowService : Service() {
 
         val confStr = "${(currentConfidence * 100).toInt()}%"
         positionText?.text = "📍 (${currentX.toInt()}, ${currentY.toInt()}) | 置信度: $confStr | 朝向: ${currentRotation.toInt()}°"
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID, "悬浮窗地图",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "游戏地图悬浮窗实时跟点"
+                setShowBadge(false)
+            }
+            getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(channel)
+        }
+    }
+
+    private fun buildNotification(text: String): Notification {
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+        } else {
+            Notification.Builder(this)
+        }
+        return builder
+            .setContentTitle("🗺️ 洛克王国地图追踪")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_dialog_map)
+            .setOngoing(true)
+            .build()
     }
 
     private fun dpToPx(dp: Int): Int =
